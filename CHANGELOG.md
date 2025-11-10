@@ -5,6 +5,156 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.32] - 2025-11-10
+
+### Fixed
+- **memory stats command** - Fixed bug where `memory stats` always returned zeros instead of showing ReasoningBank data
+  - Now shows unified statistics for both JSON and ReasoningBank storage backends
+  - Added intelligent mode detection (auto, basic, reasoningbank)
+  - Displays database size, confidence scores, and embedding counts
+  - Maintains backward compatibility with JSON-only mode
+  - Resolves GitHub issue #865
+
+### Changed
+- Enhanced `showMemoryStats()` function to support ReasoningBank mode detection
+- Improved stats output with clear separation between JSON and ReasoningBank storage
+- Added helpful tips for users to switch between storage modes
+
+### Documentation
+- Added `docs/BUG_REPORT_MEMORY_STATS.md` - Detailed bug analysis and root cause
+- Added `docs/FIX_VERIFICATION_MEMORY_STATS.md` - Comprehensive test results and verification
+
+## [2.7.31] - 2025-11-06
+
+> **📦 Dependency Update**: Updated agentic-flow to v1.9.4 with new enterprise features
+
+### Summary
+Updated `agentic-flow` dependency from `^1.8.10` to `^1.9.4` to add new enterprise features including Supabase cloud integration, provider fallback, circuit breaker patterns, and enhanced reliability features.
+
+### 🔧 Changes Made
+
+**Updated Dependency** (`package.json:123`):
+```diff
+  "dependencies": {
+-   "agentic-flow": "^1.8.10",  // ❌ Previous version
++   "agentic-flow": "^1.9.4",   // ✅ Latest with enterprise features
+  }
+```
+
+### ✨ New Features (via agentic-flow v1.9.4)
+
+**Enterprise Provider Fallback**:
+- Automatic failover: Gemini → Claude → OpenRouter → ONNX
+- Circuit breaker for cascading failure prevention
+- Real-time health monitoring and auto-recovery
+- Cost optimization with provider selection (70% savings)
+
+**Cloud Integration**:
+- `@supabase/supabase-js@^2.78.0` for cloud database features
+- Distributed agent coordination capabilities
+- Real-time synchronization support
+
+**Reliability Improvements**:
+- Checkpointing for crash recovery
+- Budget controls and cost tracking
+- Enhanced error handling with retry logic
+- Performance monitoring and diagnostics
+
+### 📊 Dependency Analysis
+
+**Risk Assessment**: ✅ **LOW** - Safe to upgrade
+- **16 existing dependencies**: All unchanged (no version bumps)
+- **1 new dependency**: `@supabase/supabase-js@^2.78.0` (optional cloud features)
+- **agentdb**: Still v1.6.1 (no regression from v2.7.30)
+- **Full backwards compatibility**: No breaking changes
+
+**Comparison (v1.8.10 → v1.9.4)**:
+```
+IDENTICAL:
+  @anthropic-ai/sdk: ^0.65.0
+  better-sqlite3: ^11.10.0
+  agentdb: ^1.4.3 (we use 1.6.1 - compatible)
+  ... 13 other dependencies unchanged
+
+NEW:
+  @supabase/supabase-js: ^2.78.0
+```
+
+### 📋 Testing
+
+**Local Regression Tests**:
+```bash
+✅ CLI version: v2.7.31
+✅ Memory command: Working
+✅ ReasoningBank: Initialized successfully
+✅ agentdb: Still v1.6.1 (no regression)
+```
+
+**Docker Validation** (`tests/docker/Dockerfile.v2.7.31-test`):
+```bash
+# Build and test
+docker build -f tests/docker/Dockerfile.v2.7.31-test -t test .
+docker run --rm test
+
+✅ Test 1: Claude-Flow version is v2.7.31
+✅ Test 2: agentic-flow is ^1.9.4 in package.json
+✅ Test 3: agentic-flow 1.9.4 installed
+✅ Test 4: agentdb 1.6.1 still installed (no regression)
+✅ Test 5: ReasoningBank initialization works
+✅ Test 6: Memory command works
+✅ Test 7: CLI executes successfully
+✅ Test 8: @supabase/supabase-js v2.80.0 available
+```
+
+### 🚀 Installation
+
+```bash
+# NPX users (recommended)
+npx claude-flow@latest init
+
+# Global installation
+npm install -g claude-flow@latest
+
+# Verify
+claude-flow --version  # v2.7.31
+```
+
+### 💡 CLI Features (via agentic-flow v1.9.4)
+
+**New Commands Available**:
+```bash
+# Enterprise provider management
+npx agentic-flow@latest providers list
+npx agentic-flow@latest providers health
+
+# Cost optimization
+npx agentic-flow@latest cost analyze
+npx agentic-flow@latest cost budget --max 100
+
+# Checkpointing
+npx agentic-flow@latest checkpoint save
+npx agentic-flow@latest checkpoint restore
+
+# 66 specialized agents across 8 categories
+npx agentic-flow@latest agents list
+```
+
+### 🔗 Documentation
+
+- **Dependency Comparison**: `/tmp/compare-versions.md`
+- **agentdb Deep Review**: `docs/AGENTDB_V1.6.1_DEEP_REVIEW.md` (from v2.7.30)
+- **Docker Tests**: `tests/docker/Dockerfile.v2.7.31-test`
+
+### 📦 Package Information
+
+**Installed Dependencies**:
+- Added: 2 packages
+- Removed: 16 packages
+- Changed: 8 packages
+- Install time: ~45 seconds (with --legacy-peer-deps)
+
+---
+
 ## [2.7.30] - 2025-11-06
 
 > **📦 Dependency Update**: Updated agentdb to v1.6.1 for better compatibility
