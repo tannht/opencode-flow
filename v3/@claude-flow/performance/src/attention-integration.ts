@@ -60,6 +60,12 @@ export interface PerformanceMetrics {
   averageExecutionTimeMs: number;
   totalMemorySavedBytes: number;
   successRate: number; // % of operations meeting target
+  // Memory tracking metrics
+  baselineMemoryBytes: number;
+  optimizedMemoryBytes: number;
+  memorySavedBytes: number;
+  memorySavedPercent: number;
+  peakMemoryBytes: number;
 }
 
 // ============================================================================
