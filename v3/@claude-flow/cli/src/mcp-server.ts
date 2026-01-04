@@ -277,8 +277,9 @@ export class MCPServerManager extends EventEmitter {
    * Start stdio server process
    */
   private async startStdioServer(): Promise<void> {
+    // Resolve server script path relative to this file
     const serverScript = path.resolve(
-      path.dirname(new URL(import.meta.url).pathname),
+      __dirname,
       '../../../mcp/server-entry.ts'
     );
 
