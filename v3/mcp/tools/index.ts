@@ -313,4 +313,5 @@ export default {
   swarmTools,
   memoryTools,
   configTools,
+  hooksTools,
 };
