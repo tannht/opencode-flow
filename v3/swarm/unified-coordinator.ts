@@ -616,6 +616,7 @@ export class UnifiedSwarmCoordinator extends EventEmitter implements IUnifiedSwa
   }
 
   private async initializeAgentPools(): Promise<void> {
+    // Initialize type-based pools (legacy support)
     const defaultPoolTypes: AgentType[] = ['worker', 'coordinator', 'researcher', 'coder'];
 
     for (const type of defaultPoolTypes) {
@@ -632,6 +633,45 @@ export class UnifiedSwarmCoordinator extends EventEmitter implements IUnifiedSwa
 
       await pool.initialize();
       this.agentPools.set(type, pool);
+    }
+
+    // Initialize domain-based pools for 15-agent hierarchy
+    await this.initializeDomainPools();
+  }
+
+  private async initializeDomainPools(): Promise<void> {
+    for (const [domain, config] of this.domainConfigs) {
+      const agentType = this.domainToAgentType(domain);
+      const pool = createAgentPool({
+        name: `${domain}-domain-pool`,
+        type: agentType,
+        minSize: 0,
+        maxSize: config.agentNumbers.length,
+        scaleUpThreshold: 0.8,
+        scaleDownThreshold: 0.2,
+        cooldownMs: 30000,
+        healthCheckIntervalMs: this.config.healthCheckIntervalMs,
+      });
+
+      await pool.initialize();
+      this.domainPools.set(domain, pool);
+    }
+  }
+
+  private domainToAgentType(domain: AgentDomain): AgentType {
+    switch (domain) {
+      case 'queen':
+        return 'queen';
+      case 'security':
+        return 'specialist';
+      case 'core':
+        return 'architect';
+      case 'integration':
+        return 'coder';
+      case 'support':
+        return 'tester';
+      default:
+        return 'worker';
     }
   }
 
