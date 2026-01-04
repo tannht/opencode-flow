@@ -6,6 +6,7 @@
 import type { Command, CommandContext, CommandResult } from '../types.js';
 import { output } from '../output.js';
 import { select, confirm, multiSelect } from '../prompt.js';
+import { callMCPTool, MCPClientError } from '../mcp-client.js';
 
 // Swarm topologies
 const TOPOLOGIES = [
