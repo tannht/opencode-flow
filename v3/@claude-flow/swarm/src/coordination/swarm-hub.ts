@@ -472,19 +472,44 @@ export class SwarmHub implements ISwarmHub {
   // ==========================================================================
 
   private ensureInitialized(): void {
-    if (!this.initialized) {
+    const state = this.coordinator.getState();
+    if (state.status === 'stopped' || state.status === 'initializing') {
       throw new Error('SwarmHub is not initialized. Call initialize() first.');
     }
   }
 
-  private getDefaultConfig(): SwarmConfig {
+  private convertToCoordinatorConfig(): any {
     return {
-      topology: 'hierarchical-mesh',
+      topology: {
+        type: 'hierarchical' as const,
+        maxAgents: 15,
+        replicationFactor: 2,
+        partitionStrategy: 'hash' as const,
+        failoverEnabled: true,
+        autoRebalance: true,
+      },
+      consensus: {
+        algorithm: 'raft' as const,
+        threshold: 0.66,
+        timeoutMs: 5000,
+        maxRounds: 10,
+        requireQuorum: true,
+      },
+      messageBus: {
+        maxQueueSize: 10000,
+        processingIntervalMs: 10,
+        ackTimeoutMs: 5000,
+        retryAttempts: 3,
+        enablePersistence: false,
+        compressionEnabled: false,
+      },
       maxAgents: 15,
-      messageTimeout: 30000,
-      retryAttempts: 3,
-      healthCheckInterval: 5000,
-      loadBalancingStrategy: 'capability-match'
+      maxTasks: 1000,
+      heartbeatIntervalMs: 5000,
+      healthCheckIntervalMs: 5000,
+      taskTimeoutMs: 300000,
+      autoScaling: true,
+      autoRecovery: true,
     };
   }
 
