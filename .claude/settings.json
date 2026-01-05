@@ -104,6 +104,11 @@
           },
           {
             "type": "command",
+            "timeout": 4000,
+            "command": ".claude/helpers/learning-hooks.sh store \"Edit: $TOOL_INPUT_file_path\" code 0.7 2>/dev/null || true"
+          },
+          {
+            "type": "command",
             "timeout": 3000,
             "command": ".claude/helpers/checkpoint-manager.sh auto-checkpoint \"File edit: $TOOL_INPUT_file_path\" 2>/dev/null || true"
           }
