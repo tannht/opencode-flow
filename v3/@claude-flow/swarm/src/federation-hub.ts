@@ -373,11 +373,10 @@ export class FederationHub extends EventEmitter {
   unregisterSwarm(swarmId: SwarmId): boolean {
     const removed = this.swarms.delete(swarmId);
     if (removed) {
-      // Terminate all ephemeral agents in this swarm
-      for (const agent of this.ephemeralAgents.values()) {
-        if (agent.swarmId === swarmId) {
-          this.terminateAgent(agent.id);
-        }
+      // Terminate all ephemeral agents in this swarm using index - O(k)
+      const agentIds = this.getAgentIdsBySwarm(swarmId);
+      for (const agentId of agentIds) {
+        this.terminateAgent(agentId);
       }
       this.emitEvent('swarm_left', swarmId);
     }
