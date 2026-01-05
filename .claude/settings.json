@@ -224,7 +224,7 @@
           {
             "type": "command",
             "timeout": 8000,
-            "command": "npx agentic-flow@alpha hooks metrics --session --json --export-patterns --consolidate-learning --v3-summary 2>/dev/null || true"
+            "command": "npx agentic-flow@alpha hooks metrics --json 2>/dev/null || true"
           },
           {
             "type": "command",
