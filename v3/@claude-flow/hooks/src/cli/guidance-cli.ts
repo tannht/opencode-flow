@@ -16,6 +16,7 @@
 
 import { GuidanceProvider } from '../reasoningbank/guidance-provider.js';
 import { reasoningBank } from '../reasoningbank/index.js';
+import { swarmComm } from '../swarm/index.js';
 import { readFileSync } from 'fs';
 
 const provider = new GuidanceProvider(reasoningBank);
