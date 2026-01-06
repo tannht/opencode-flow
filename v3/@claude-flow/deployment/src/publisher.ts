@@ -58,8 +58,8 @@ export class Publisher {
         this.execCommand(buildCommand);
       }
 
-      // Construct npm publish command
-      const publishArgs: string[] = ['npm', 'publish'];
+      // Construct npm publish command arguments (without 'npm' prefix for execNpmCommand)
+      const publishArgs: string[] = ['publish'];
 
       if (tag) {
         publishArgs.push('--tag', tag);
@@ -86,10 +86,10 @@ export class Publisher {
 
       if (dryRun) {
         console.log('Dry run mode - no actual publish');
-        console.log('Command:', publishArgs.join(' '));
+        console.log('Command: npm', publishArgs.join(' '));
       }
 
-      const output = this.execCommand(publishArgs.join(' '), true);
+      const output = this.execNpmCommand(publishArgs, true);
 
       // Parse output for tarball URL
       const tarballMatch = output.match(/https:\/\/[^\s]+\.tgz/);
@@ -176,11 +176,12 @@ export class Publisher {
    */
   async pack(outputDir?: string): Promise<string> {
     try {
-      const cmd = outputDir
-        ? `npm pack --pack-destination ${outputDir}`
-        : 'npm pack';
+      const packArgs = ['pack'];
+      if (outputDir) {
+        packArgs.push('--pack-destination', outputDir);
+      }
 
-      const output = this.execCommand(cmd, true);
+      const output = this.execNpmCommand(packArgs, true);
       const tarballName = output.trim().split('\n').pop() || '';
 
       return outputDir ? join(outputDir, tarballName) : tarballName;

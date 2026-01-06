@@ -11,6 +11,40 @@
 
 import { z } from 'zod';
 import { MCPTool, ToolContext } from '../types.js';
+import { resolve, normalize } from 'path';
+
+/**
+ * Validate and sanitize config file path to prevent path traversal
+ */
+function validateConfigPath(inputPath: string, cwd: string = process.cwd()): string {
+  // Normalize the path to resolve .. and .
+  const normalizedPath = normalize(inputPath);
+
+  // Block absolute paths and paths with traversal
+  if (normalizedPath.startsWith('/') || normalizedPath.startsWith('\\')) {
+    throw new Error('Absolute paths are not allowed for config files');
+  }
+  if (normalizedPath.includes('..')) {
+    throw new Error('Path traversal (..) is not allowed');
+  }
+
+  // Only allow .json and .config.* files
+  const allowedExtensions = ['.json', '.config.json', '.config.js', '.config.ts'];
+  const hasAllowedExt = allowedExtensions.some(ext => normalizedPath.endsWith(ext));
+  if (!hasAllowedExt) {
+    throw new Error('Only .json and .config.* file extensions are allowed');
+  }
+
+  // Resolve to absolute path within cwd
+  const resolvedPath = resolve(cwd, normalizedPath);
+
+  // Ensure the resolved path is within cwd
+  if (!resolvedPath.startsWith(cwd)) {
+    throw new Error('Config path must be within current working directory');
+  }
+
+  return resolvedPath;
+}
 
 // ============================================================================
 // Input Schemas
@@ -210,7 +244,9 @@ async function handleLoadConfig(
   input: z.infer<typeof loadConfigSchema>,
   context?: ToolContext
 ): Promise<LoadConfigResult> {
-  const path = input.path || './claude-flow.config.json';
+  const inputPath = input.path || './claude-flow.config.json';
+  // Validate path to prevent traversal attacks
+  const safePath = validateConfigPath(inputPath);
   const loadedAt = new Date().toISOString();
 
   let config: Configuration = { ...DEFAULT_CONFIG };
@@ -218,7 +254,7 @@ async function handleLoadConfig(
   // Try to load from filesystem
   try {
     const fs = await import('fs/promises');
-    const fileContent = await fs.readFile(path, 'utf-8');
+    const fileContent = await fs.readFile(safePath, 'utf-8');
     const loadedConfig = JSON.parse(fileContent) as Configuration;
 
     if (input.merge) {
@@ -256,7 +292,9 @@ async function handleSaveConfig(
   input: z.infer<typeof saveConfigSchema>,
   context?: ToolContext
 ): Promise<SaveConfigResult> {
-  const path = input.path || './claude-flow.config.json';
+  const inputPath = input.path || './claude-flow.config.json';
+  // Validate path to prevent traversal attacks
+  const safePath = validateConfigPath(inputPath);
   const savedAt = new Date().toISOString();
   let backupPath: string | undefined;
 
@@ -266,8 +304,8 @@ async function handleSaveConfig(
     // Create backup if requested
     if (input.createBackup) {
       try {
-        const existingContent = await fs.readFile(path, 'utf-8');
-        backupPath = `${path}.backup.${Date.now()}`;
+        const existingContent = await fs.readFile(safePath, 'utf-8');
+        backupPath = `${safePath}.backup.${Date.now()}`;
         await fs.writeFile(backupPath, existingContent, 'utf-8');
       } catch (error: any) {
         // Ignore if file doesn't exist
@@ -281,7 +319,7 @@ async function handleSaveConfig(
     let configToSave = input.config;
     if (input.merge) {
       try {
-        const existingContent = await fs.readFile(path, 'utf-8');
+        const existingContent = await fs.readFile(safePath, 'utf-8');
         const existingConfig = JSON.parse(existingContent);
         configToSave = { ...existingConfig, ...input.config };
       } catch (error: any) {
@@ -293,11 +331,11 @@ async function handleSaveConfig(
     }
 
     // Save the configuration
-    await fs.writeFile(path, JSON.stringify(configToSave, null, 2), 'utf-8');
+    await fs.writeFile(safePath, JSON.stringify(configToSave, null, 2), 'utf-8');
 
     return {
       saved: true,
-      path,
+      path: safePath,
       scope: input.scope,
       savedAt,
       backupPath,

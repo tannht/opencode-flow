@@ -110,7 +110,7 @@
           {
             "type": "command",
             "timeout": 5000,
-            "command": ".claude/helpers/guidance-hooks.sh post-edit \"$TOOL_INPUT_file_path\""
+            "command": ".claude/helpers/guidance-hooks.sh post-edit \"$TOOL_INPUT_file_path\" 2>/dev/null || true"
           },
           {
             "type": "command",
