@@ -348,9 +348,9 @@ if [ "$QUEUE_PENDING" -gt 0 ]; then
   QUEUE_INDICATOR="  ${DIM}📨 ${QUEUE_PENDING}${RESET}"
 fi
 
-# Format context and intel with padding for alignment
-CONTEXT_DISPLAY=$(printf "%2d" "$CONTEXT_PCT")
-INTEL_DISPLAY=$(printf "%2d" "$INTEL_SCORE")
+# Format context and intel with padding for alignment (3 digits for up to 100%)
+CONTEXT_DISPLAY=$(printf "%3d" "$CONTEXT_PCT")
+INTEL_DISPLAY=$(printf "%3d" "$INTEL_SCORE")
 
 OUTPUT="${OUTPUT}\n${BRIGHT_YELLOW}🤖 Swarm${RESET}  ${ACTIVITY_INDICATOR}[${AGENTS_COLOR}${AGENT_DISPLAY}${RESET}/${BRIGHT_WHITE}${AGENTS_TARGET}${RESET}]  ${SUBAGENT_COLOR}👥 ${SUBAGENT_COUNT}${RESET}${QUEUE_INDICATOR}    ${SECURITY_ICON} ${SECURITY_COLOR}CVE ${CVES_FIXED}${RESET}/${BRIGHT_WHITE}${SECURITY_CVES}${RESET}    ${MEMORY_COLOR}💾 ${MEMORY_DISPLAY}${RESET}    ${CONTEXT_COLOR}📂 ${CONTEXT_DISPLAY}%${RESET}    ${INTEL_COLOR}🧠 ${INTEL_DISPLAY}%${RESET}"
 
