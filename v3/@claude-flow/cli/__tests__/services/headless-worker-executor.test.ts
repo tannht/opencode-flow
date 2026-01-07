@@ -775,36 +775,27 @@ describe('HeadlessWorkerExecutor', () => {
     });
 
     it('should timeout after specified duration', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-
       const config: HeadlessWorkerConfig = {
         workerId: 'timeout-test',
         workerType: 'map',
         prompt: 'Analyze',
-        timeout: 100, // 100ms for faster test
+        timeout: 50, // 50ms for faster test
       };
 
       const timeoutHandler = vi.fn();
       executor.on('timeout', timeoutHandler);
 
-      // Start execution
-      const resultPromise = executor.execute(config);
-
-      // Advance past timeout
-      await vi.advanceTimersByTimeAsync(150);
-
-      const result = await resultPromise;
+      // Process never completes - will timeout
+      const result = await executor.execute(config);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('timed out');
       expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGTERM');
       expect(timeoutHandler).toHaveBeenCalledWith({
         workerId: 'timeout-test',
-        timeout: 100,
+        timeout: 50,
       });
-
-      vi.useRealTimers();
-    }, 10000);
+    });
 
     it('should use default timeout configuration', () => {
       // Test default timeout configuration value
