@@ -90,14 +90,24 @@ console.log(`Provider: agentic-flow, Latency: ${result.latencyMs}ms`);
 ### Factory Functions
 
 ```typescript
-import { createEmbeddingService, getEmbedding } from '@claude-flow/embeddings';
+import {
+  createEmbeddingService,
+  createEmbeddingServiceAsync,
+  getEmbedding
+} from '@claude-flow/embeddings';
 
-// Create a service instance
+// Sync: Create with known provider
 const service = createEmbeddingService({
   provider: 'openai',
   apiKey: 'your-api-key',
   model: 'text-embedding-3-small',
-  cacheSize: 1000,
+});
+
+// Async: Auto-select best provider with fallback
+const autoService = await createEmbeddingServiceAsync({
+  provider: 'auto',       // agentic-flow → transformers → mock
+  autoInstall: true,      // Install agentic-flow if missing
+  fallback: 'transformers', // Custom fallback
 });
 
 // Quick one-off embedding
