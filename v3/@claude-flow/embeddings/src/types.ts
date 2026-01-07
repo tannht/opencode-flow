@@ -19,7 +19,7 @@
 /**
  * Supported embedding providers
  */
-export type EmbeddingProvider = 'openai' | 'transformers' | 'mock';
+export type EmbeddingProvider = 'openai' | 'transformers' | 'mock' | 'agentic-flow';
 
 /**
  * Base configuration for all providers
