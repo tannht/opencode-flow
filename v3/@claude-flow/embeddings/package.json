@@ -29,7 +29,12 @@
     "vector",
     "similarity",
     "claude-flow",
-    "v3"
+    "v3",
+    "hyperbolic",
+    "poincare",
+    "normalization",
+    "chunking",
+    "neural-substrate"
   ],
   "author": "Claude Flow Team",
   "license": "MIT",
