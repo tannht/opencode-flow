@@ -6,187 +6,257 @@
  * @module @claude-flow/cli/commands/progress
  */
 
-import type { Command } from '../types.js';
-import { V3ProgressService } from '@claude-flow/shared';
-
-// Colors
-const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
-const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
-const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
-const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
-const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+import type { Command, CommandContext, CommandResult } from '../types.js';
+import { output } from '../output.js';
+import { callMCPTool, MCPClientError } from '../mcp-client.js';
 
 function progressBar(percent: number, width: number = 20): string {
   const filled = Math.round((percent / 100) * width);
   const empty = width - filled;
-  const bar = green('█'.repeat(filled)) + dim('░'.repeat(empty));
+  const bar = output.success('█'.repeat(filled)) + output.dim('░'.repeat(empty));
   return `[${bar}] ${percent}%`;
 }
 
+// Check subcommand
+const checkCommand: Command = {
+  name: 'check',
+  description: 'Check current progress (default)',
+  options: [
+    {
+      name: 'detailed',
+      short: 'd',
+      description: 'Show detailed breakdown',
+      type: 'boolean',
+      default: false,
+    },
+  ],
+  action: async (ctx: CommandContext): Promise<CommandResult> => {
+    const detailed = ctx.flags.detailed as boolean;
+    const spinner = output.createSpinner();
+
+    try {
+      spinner.start('Checking V3 progress...');
+      const result = await callMCPTool<{
+        progress?: number;
+        overall?: number;
+        breakdown?: Record<string, string>;
+        cli?: { progress: number; commands: number; target: number };
+        mcp?: { progress: number; tools: number; target: number };
+        hooks?: { progress: number; subcommands: number; target: number };
+        packages?: { progress: number; total: number; target: number; withDDD: number };
+        ddd?: { progress: number };
+        codebase?: { totalFiles: number; totalLines: number };
+        lastUpdated?: string;
+      }>('progress/check', { detailed });
+      spinner.stop();
+
+      if (ctx.flags.format === 'json') {
+        output.printJson(result);
+        return { success: true, data: result };
+      }
+
+      const progressValue = result.overall ?? result.progress ?? 0;
+
+      output.writeln();
+      output.writeln(output.bold('V3 Implementation Progress'));
+      output.writeln();
+      output.writeln(progressBar(progressValue, 30));
+      output.writeln();
+
+      if (detailed && result.cli) {
+        output.writeln(output.highlight('CLI Commands:') + `     ${result.cli.progress}% (${result.cli.commands}/${result.cli.target})`);
+        output.writeln(output.highlight('MCP Tools:') + `        ${result.mcp?.progress ?? 0}% (${result.mcp?.tools ?? 0}/${result.mcp?.target ?? 0})`);
+        output.writeln(output.highlight('Hooks:') + `            ${result.hooks?.progress ?? 0}% (${result.hooks?.subcommands ?? 0}/${result.hooks?.target ?? 0})`);
+        output.writeln(output.highlight('Packages:') + `         ${result.packages?.progress ?? 0}% (${result.packages?.total ?? 0}/${result.packages?.target ?? 0})`);
+        output.writeln(output.highlight('DDD Structure:') + `    ${result.ddd?.progress ?? 0}% (${result.packages?.withDDD ?? 0}/${result.packages?.total ?? 0})`);
+        output.writeln();
+        if (result.codebase) {
+          output.writeln(output.dim(`Codebase: ${result.codebase.totalFiles} files, ${result.codebase.totalLines.toLocaleString()} lines`));
+        }
+      } else if (result.breakdown) {
+        output.writeln('Breakdown:');
+        for (const [category, value] of Object.entries(result.breakdown)) {
+          output.writeln(`  ${output.highlight(category)}: ${value}`);
+        }
+      }
+
+      if (result.lastUpdated) {
+        output.writeln(output.dim(`Last updated: ${result.lastUpdated}`));
+      }
+
+      return { success: true, data: result };
+    } catch (error) {
+      spinner.fail('Progress check failed');
+      if (error instanceof MCPClientError) {
+        output.printError(`Error: ${error.message}`);
+      } else {
+        output.printError(`Unexpected error: ${String(error)}`);
+      }
+      return { success: false, exitCode: 1 };
+    }
+  },
+};
+
+// Sync subcommand
+const syncCommand: Command = {
+  name: 'sync',
+  description: 'Calculate and persist progress',
+  action: async (ctx: CommandContext): Promise<CommandResult> => {
+    const spinner = output.createSpinner();
+
+    try {
+      spinner.start('Syncing progress...');
+      const result = await callMCPTool<{
+        progress: number;
+        message: string;
+        persisted: boolean;
+        lastUpdated: string;
+      }>('progress/sync', {});
+      spinner.stop();
+
+      if (ctx.flags.format === 'json') {
+        output.printJson(result);
+        return { success: true, data: result };
+      }
+
+      output.writeln();
+      output.printSuccess(`Progress synced: ${result.progress}%`);
+      output.writeln(output.dim(`  Persisted to .claude-flow/metrics/v3-progress.json`));
+      output.writeln(output.dim(`  Last updated: ${result.lastUpdated}`));
+
+      return { success: true, data: result };
+    } catch (error) {
+      spinner.fail('Progress sync failed');
+      if (error instanceof MCPClientError) {
+        output.printError(`Error: ${error.message}`);
+      } else {
+        output.printError(`Unexpected error: ${String(error)}`);
+      }
+      return { success: false, exitCode: 1 };
+    }
+  },
+};
+
+// Summary subcommand
+const summaryCommand: Command = {
+  name: 'summary',
+  description: 'Show human-readable summary',
+  action: async (ctx: CommandContext): Promise<CommandResult> => {
+    const spinner = output.createSpinner();
+
+    try {
+      spinner.start('Getting progress summary...');
+      const result = await callMCPTool<{ summary: string }>('progress/summary', {});
+      spinner.stop();
+
+      if (ctx.flags.format === 'json') {
+        output.printJson(result);
+        return { success: true, data: result };
+      }
+
+      output.writeln();
+      output.writeln(result.summary);
+
+      return { success: true, data: result };
+    } catch (error) {
+      spinner.fail('Summary fetch failed');
+      if (error instanceof MCPClientError) {
+        output.printError(`Error: ${error.message}`);
+      } else {
+        output.printError(`Unexpected error: ${String(error)}`);
+      }
+      return { success: false, exitCode: 1 };
+    }
+  },
+};
+
+// Watch subcommand
+const watchCommand: Command = {
+  name: 'watch',
+  description: 'Watch for progress changes',
+  options: [
+    {
+      name: 'interval',
+      short: 'i',
+      description: 'Update interval in milliseconds',
+      type: 'number',
+      default: 5000,
+    },
+  ],
+  action: async (ctx: CommandContext): Promise<CommandResult> => {
+    const interval = (ctx.flags.interval as number) || 5000;
+
+    output.writeln(output.highlight(`Watching progress (interval: ${interval}ms). Press Ctrl+C to stop.`));
+    output.writeln();
+
+    let lastProgress = 0;
+
+    const check = async () => {
+      try {
+        const result = await callMCPTool<{ progress?: number; overall?: number }>('progress/check', {});
+        const currentProgress = result.overall ?? result.progress ?? 0;
+
+        if (currentProgress !== lastProgress) {
+          output.writeln(`${output.warning('→')} Progress changed: ${lastProgress}% → ${output.success(currentProgress + '%')}`);
+          lastProgress = currentProgress;
+        } else {
+          process.stdout.write(`\r${progressBar(currentProgress, 20)} ${output.dim(new Date().toLocaleTimeString())}`);
+        }
+      } catch (error) {
+        output.printError(`Check failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    await check();
+    const timer = setInterval(check, interval);
+
+    // Handle Ctrl+C
+    process.on('SIGINT', () => {
+      clearInterval(timer);
+      output.writeln();
+      output.writeln(output.dim('Stopped watching.'));
+      process.exit(0);
+    });
+
+    // Keep running
+    return new Promise(() => {});
+  },
+};
+
+// Main progress command
 export const progressCommand: Command = {
   name: 'progress',
   description: 'Check V3 implementation progress',
   aliases: ['prog'],
+  subcommands: [
+    checkCommand,
+    syncCommand,
+    summaryCommand,
+    watchCommand,
+  ],
   options: [
     {
-      flags: '-d, --detailed',
+      name: 'detailed',
+      short: 'd',
       description: 'Show detailed breakdown',
-    },
-    {
-      flags: '-j, --json',
-      description: 'Output as JSON',
-    },
-    {
-      flags: '-s, --sync',
-      description: 'Sync and persist progress',
-    },
-    {
-      flags: '-w, --watch',
-      description: 'Watch for changes',
-    },
-  ],
-  subcommands: [
-    {
-      name: 'check',
-      description: 'Check current progress (default)',
-      action: async (options) => {
-        const service = new V3ProgressService();
-        const metrics = await service.calculate();
-
-        if (options.json) {
-          console.log(JSON.stringify(metrics, null, 2));
-          return;
-        }
-
-        console.log(`\n${bold('V3 Implementation Progress')}\n`);
-        console.log(progressBar(metrics.overall, 30));
-        console.log();
-
-        if (options.detailed) {
-          console.log(`${cyan('CLI Commands:')}     ${progressBar(metrics.cli.progress, 15)} ${dim(`(${metrics.cli.commands}/${metrics.cli.target})`)}`);
-          console.log(`${cyan('MCP Tools:')}        ${progressBar(metrics.mcp.progress, 15)} ${dim(`(${metrics.mcp.tools}/${metrics.mcp.target})`)}`);
-          console.log(`${cyan('Hooks:')}            ${progressBar(metrics.hooks.progress, 15)} ${dim(`(${metrics.hooks.subcommands}/${metrics.hooks.target})`)}`);
-          console.log(`${cyan('Packages:')}         ${progressBar(metrics.packages.progress, 15)} ${dim(`(${metrics.packages.total}/${metrics.packages.target})`)}`);
-          console.log(`${cyan('DDD Structure:')}    ${progressBar(metrics.ddd.progress, 15)} ${dim(`(${metrics.packages.withDDD}/${metrics.packages.total})`)}`);
-          console.log();
-          console.log(`${dim('Codebase:')} ${metrics.codebase.totalFiles} files, ${metrics.codebase.totalLines.toLocaleString()} lines`);
-        }
-
-        console.log(`${dim('Last updated:')} ${metrics.lastUpdated}`);
-      },
+      type: 'boolean',
+      default: false,
     },
     {
       name: 'sync',
-      description: 'Calculate and persist progress',
-      action: async (options) => {
-        const service = new V3ProgressService();
-        const metrics = await service.sync();
-
-        if (options.json) {
-          console.log(JSON.stringify({ success: true, progress: metrics.overall }, null, 2));
-          return;
-        }
-
-        console.log(green('✓') + ` Progress synced: ${bold(metrics.overall + '%')}`);
-        console.log(dim(`  Persisted to .claude-flow/metrics/v3-progress.json`));
-      },
-    },
-    {
-      name: 'summary',
-      description: 'Show human-readable summary',
-      action: async () => {
-        const service = new V3ProgressService();
-        const summary = await service.getSummary();
-        console.log('\n' + summary + '\n');
-      },
+      short: 's',
+      description: 'Sync and persist progress',
+      type: 'boolean',
+      default: false,
     },
     {
       name: 'watch',
-      description: 'Watch for progress changes',
-      options: [
-        {
-          flags: '-i, --interval <ms>',
-          description: 'Update interval in milliseconds',
-          default: '5000',
-        },
-      ],
-      action: async (options) => {
-        const interval = parseInt(options.interval as string) || 5000;
-        const service = new V3ProgressService();
-
-        console.log(cyan(`Watching progress (interval: ${interval}ms). Press Ctrl+C to stop.\n`));
-
-        let lastProgress = 0;
-
-        service.on('progressChange', (event) => {
-          console.log(
-            `${yellow('→')} Progress changed: ${event.previous}% → ${green(event.current + '%')}`
-          );
-        });
-
-        const check = async () => {
-          const metrics = await service.calculate();
-          if (metrics.overall !== lastProgress) {
-            process.stdout.write('\r' + ' '.repeat(50) + '\r');
-          }
-          process.stdout.write(`\r${progressBar(metrics.overall, 20)} ${dim(new Date().toLocaleTimeString())}`);
-          lastProgress = metrics.overall;
-        };
-
-        await check();
-        const timer = setInterval(check, interval);
-
-        // Handle Ctrl+C
-        process.on('SIGINT', () => {
-          clearInterval(timer);
-          console.log('\n' + dim('Stopped watching.'));
-          process.exit(0);
-        });
-      },
+      short: 'w',
+      description: 'Watch for changes',
+      type: 'boolean',
+      default: false,
     },
   ],
-  action: async (options) => {
-    // Default to 'check' subcommand
-    const service = new V3ProgressService();
-
-    if (options.sync) {
-      const metrics = await service.sync();
-      console.log(green('✓') + ` Progress synced: ${bold(metrics.overall + '%')}`);
-      return;
-    }
-
-    if (options.watch) {
-      // Redirect to watch subcommand
-      const watchCmd = progressCommand.subcommands?.find(s => s.name === 'watch');
-      if (watchCmd?.action) {
-        await watchCmd.action(options);
-      }
-      return;
-    }
-
-    const metrics = await service.calculate();
-
-    if (options.json) {
-      console.log(JSON.stringify(metrics, null, 2));
-      return;
-    }
-
-    console.log(`\n${bold('V3 Implementation Progress')}\n`);
-    console.log(progressBar(metrics.overall, 30));
-    console.log();
-
-    if (options.detailed) {
-      console.log(`${cyan('CLI Commands:')}     ${progressBar(metrics.cli.progress, 15)} ${dim(`(${metrics.cli.commands}/${metrics.cli.target})`)}`);
-      console.log(`${cyan('MCP Tools:')}        ${progressBar(metrics.mcp.progress, 15)} ${dim(`(${metrics.mcp.tools}/${metrics.mcp.target})`)}`);
-      console.log(`${cyan('Hooks:')}            ${progressBar(metrics.hooks.progress, 15)} ${dim(`(${metrics.hooks.subcommands}/${metrics.hooks.target})`)}`);
-      console.log(`${cyan('Packages:')}         ${progressBar(metrics.packages.progress, 15)} ${dim(`(${metrics.packages.total}/${metrics.packages.target})`)}`);
-      console.log(`${cyan('DDD Structure:')}    ${progressBar(metrics.ddd.progress, 15)} ${dim(`(${metrics.packages.withDDD}/${metrics.packages.total})`)}`);
-      console.log();
-      console.log(`${dim('Codebase:')} ${metrics.codebase.totalFiles} files, ${metrics.codebase.totalLines.toLocaleString()} lines`);
-    }
-
-    console.log(`${dim('Last updated:')} ${metrics.lastUpdated}`);
-  },
   examples: [
     {
       command: 'claude-flow progress',
@@ -209,6 +279,20 @@ export const progressCommand: Command = {
       description: 'Output as JSON',
     },
   ],
+  action: async (ctx: CommandContext): Promise<CommandResult> => {
+    // Handle --sync flag
+    if (ctx.flags.sync) {
+      return syncCommand.action!(ctx);
+    }
+
+    // Handle --watch flag
+    if (ctx.flags.watch) {
+      return watchCommand.action!(ctx);
+    }
+
+    // Default to check
+    return checkCommand.action!(ctx);
+  },
 };
 
 export default progressCommand;
