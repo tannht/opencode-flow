@@ -121,6 +121,39 @@ export interface IssueFilters {
 }
 
 // ============================================================================
+// GitHub Integration Types
+// ============================================================================
+
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  body: string;
+  state: 'open' | 'closed';
+  labels: string[];
+  assignees: string[];
+  url: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GitHubSyncConfig {
+  enabled: boolean;
+  repo?: string; // owner/repo
+  syncLabels: boolean;
+  claimLabel: string;
+  autoAssign: boolean;
+  commentOnClaim: boolean;
+  commentOnRelease: boolean;
+}
+
+export interface GitHubSyncResult {
+  success: boolean;
+  synced: number;
+  errors: string[];
+  issues?: GitHubIssue[];
+}
+
+// ============================================================================
 // Default Configuration
 // ============================================================================
 
