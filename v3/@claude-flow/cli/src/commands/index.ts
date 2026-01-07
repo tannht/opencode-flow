@@ -55,6 +55,8 @@ const commandLoaders: Record<string, CommandLoader> = {
   route: () => import('./route.js'),
   // Progress Commands
   progress: () => import('./progress.js'),
+  // Issue Claims Commands (ADR-016)
+  issues: () => import('./issues.js'),
 };
 
 // Cache for loaded commands
