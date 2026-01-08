@@ -7,6 +7,157 @@ import type { Command, CommandContext, CommandResult } from '../types.js';
 import { output } from '../output.js';
 import { select, confirm, multiSelect } from '../prompt.js';
 import { callMCPTool, MCPClientError } from '../mcp-client.js';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Get dynamic swarm status from memory/session files
+function getSwarmStatus(swarmId?: string) {
+  const swarmDir = path.join(process.cwd(), '.swarm');
+  const sessionDir = path.join(process.cwd(), '.claude', 'sessions');
+  const memoryPaths = [
+    path.join(process.cwd(), '.swarm', 'memory.db'),
+    path.join(process.cwd(), '.claude', 'memory.db'),
+  ];
+
+  // Check for active swarm state file
+  const swarmStateFile = path.join(swarmDir, 'state.json');
+  let swarmState: Record<string, unknown> | null = null;
+
+  if (fs.existsSync(swarmStateFile)) {
+    try {
+      swarmState = JSON.parse(fs.readFileSync(swarmStateFile, 'utf-8'));
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Count active agents from process files
+  let activeAgents = 0;
+  let totalAgents = 0;
+  const agentsDir = path.join(swarmDir, 'agents');
+  if (fs.existsSync(agentsDir)) {
+    try {
+      const agentFiles = fs.readdirSync(agentsDir).filter(f => f.endsWith('.json'));
+      totalAgents = agentFiles.length;
+      for (const file of agentFiles) {
+        try {
+          const agent = JSON.parse(fs.readFileSync(path.join(agentsDir, file), 'utf-8'));
+          if (agent.status === 'active' || agent.status === 'running') {
+            activeAgents++;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Get session count
+  let sessionCount = 0;
+  if (fs.existsSync(sessionDir)) {
+    try {
+      sessionCount = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json')).length;
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Get memory size as rough indicator of activity
+  let memorySize = 0;
+  for (const dbPath of memoryPaths) {
+    if (fs.existsSync(dbPath)) {
+      try {
+        memorySize = fs.statSync(dbPath).size;
+        break;
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  // Count task files if they exist
+  let completedTasks = 0;
+  let inProgressTasks = 0;
+  let pendingTasks = 0;
+  const tasksDir = path.join(swarmDir, 'tasks');
+  if (fs.existsSync(tasksDir)) {
+    try {
+      const taskFiles = fs.readdirSync(tasksDir).filter(f => f.endsWith('.json'));
+      for (const file of taskFiles) {
+        try {
+          const task = JSON.parse(fs.readFileSync(path.join(tasksDir, file), 'utf-8'));
+          if (task.status === 'completed' || task.status === 'done') {
+            completedTasks++;
+          } else if (task.status === 'in_progress' || task.status === 'running') {
+            inProgressTasks++;
+          } else {
+            pendingTasks++;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Calculate dynamic progress based on actual state
+  // If no swarm state, show 0%. Otherwise calculate from completed tasks
+  const totalTasks = completedTasks + inProgressTasks + pendingTasks;
+  let progress = 0;
+  if (totalTasks > 0) {
+    progress = Math.round((completedTasks / totalTasks) * 100);
+  } else if (swarmState) {
+    // Swarm initialized but no tasks yet
+    progress = 5;
+  }
+
+  // Determine status
+  let status = 'idle';
+  if (inProgressTasks > 0 || activeAgents > 0) {
+    status = 'running';
+  } else if (completedTasks > 0 && pendingTasks === 0 && inProgressTasks === 0) {
+    status = 'completed';
+  } else if (swarmState) {
+    status = 'ready';
+  }
+
+  return {
+    id: swarmId || (swarmState as Record<string, string>)?.id || 'no-active-swarm',
+    topology: (swarmState as Record<string, string>)?.topology || 'none',
+    status,
+    objective: (swarmState as Record<string, string>)?.objective || 'No active objective',
+    strategy: (swarmState as Record<string, string>)?.strategy || 'none',
+    agents: {
+      total: totalAgents,
+      active: activeAgents,
+      idle: Math.max(0, totalAgents - activeAgents),
+      completed: 0
+    },
+    progress,
+    tasks: {
+      total: totalTasks,
+      completed: completedTasks,
+      inProgress: inProgressTasks,
+      pending: pendingTasks
+    },
+    metrics: {
+      tokensUsed: 0,
+      avgResponseTime: '--',
+      successRate: totalTasks > 0 ? `${Math.round((completedTasks / totalTasks) * 100)}%` : '--',
+      elapsedTime: '--'
+    },
+    coordination: {
+      consensusRounds: 0,
+      messagesSent: 0,
+      conflictsResolved: 0
+    },
+    hasActiveSwarm: !!swarmState || totalAgents > 0
+  };
+}
 
 // Swarm topologies
 const TOPOLOGIES = [
