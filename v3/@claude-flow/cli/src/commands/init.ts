@@ -579,6 +579,18 @@ export const initCommand: Command = {
       type: 'boolean',
       default: false,
     },
+    {
+      name: 'start-all',
+      description: 'Auto-start daemon, memory, and swarm after init',
+      type: 'boolean',
+      default: false,
+    },
+    {
+      name: 'start-daemon',
+      description: 'Auto-start daemon after init',
+      type: 'boolean',
+      default: false,
+    },
   ],
   examples: [
     { command: 'claude-flow init', description: 'Initialize with default configuration' },
