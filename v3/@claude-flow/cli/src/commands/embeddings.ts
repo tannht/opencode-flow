@@ -107,15 +107,16 @@ const generateCommand: Command = {
   },
 };
 
-// Search subcommand
+// Search subcommand - REAL implementation using sql.js
 const searchCommand: Command = {
   name: 'search',
   description: 'Semantic similarity search',
   options: [
     { name: 'query', short: 'q', type: 'string', description: 'Search query', required: true },
-    { name: 'collection', short: 'c', type: 'string', description: 'Collection to search', default: 'default' },
+    { name: 'collection', short: 'c', type: 'string', description: 'Namespace to search', default: 'default' },
     { name: 'limit', short: 'l', type: 'number', description: 'Max results', default: '10' },
-    { name: 'threshold', short: 't', type: 'number', description: 'Similarity threshold (0-1)', default: '0.7' },
+    { name: 'threshold', short: 't', type: 'number', description: 'Similarity threshold (0-1)', default: '0.5' },
+    { name: 'db-path', type: 'string', description: 'Database path', default: '.swarm/memory.db' },
   ],
   examples: [
     { command: 'claude-flow embeddings search -q "error handling"', description: 'Search for similar' },
@@ -123,8 +124,10 @@ const searchCommand: Command = {
   ],
   action: async (ctx: CommandContext): Promise<CommandResult> => {
     const query = ctx.flags.query as string;
-    const collection = ctx.flags.collection as string || 'default';
+    const namespace = ctx.flags.collection as string || 'default';
     const limit = parseInt(ctx.flags.limit as string || '10', 10);
+    const threshold = parseFloat(ctx.flags.threshold as string || '0.5');
+    const dbPath = ctx.flags['db-path'] as string || '.swarm/memory.db';
 
     if (!query) {
       output.printError('Query is required');
@@ -137,31 +140,168 @@ const searchCommand: Command = {
 
     const spinner = output.createSpinner({ text: 'Searching...', spinner: 'dots' });
     spinner.start();
-    await new Promise(r => setTimeout(r, 300));
-    spinner.succeed(`Found matches in ${collection}`);
 
-    output.writeln();
-    output.printTable({
-      columns: [
-        { key: 'score', header: 'Score', width: 10 },
-        { key: 'id', header: 'ID', width: 12 },
-        { key: 'content', header: 'Content', width: 45 },
-      ],
-      data: [
-        { score: output.success('0.94'), id: 'doc-123', content: 'Error handling best practices...' },
-        { score: output.success('0.89'), id: 'doc-456', content: 'Exception management patterns...' },
-        { score: output.success('0.85'), id: 'doc-789', content: 'Try-catch implementation guide...' },
-        { score: output.warning('0.78'), id: 'doc-012', content: 'Debugging error scenarios...' },
-        { score: output.warning('0.72'), id: 'doc-345', content: 'Logging errors effectively...' },
-      ],
-    });
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const fullDbPath = path.resolve(process.cwd(), dbPath);
 
-    output.writeln();
-    output.writeln(output.dim(`Searched ${collection} collection (HNSW index, 0.08ms)`));
+      // Check if database exists
+      if (!fs.existsSync(fullDbPath)) {
+        spinner.fail('Database not found');
+        output.printWarning(`No database at ${fullDbPath}`);
+        output.printInfo('Run: claude-flow memory init');
+        return { success: false, exitCode: 1 };
+      }
 
-    return { success: true };
+      // Load sql.js
+      const initSqlJs = (await import('sql.js')).default;
+      const SQL = await initSqlJs();
+
+      const fileBuffer = fs.readFileSync(fullDbPath);
+      const db = new SQL.Database(fileBuffer);
+
+      const startTime = Date.now();
+
+      // Generate embedding for query
+      const { generateEmbedding } = await import('../memory/memory-initializer.js');
+      const queryResult = await generateEmbedding(query);
+      const queryEmbedding = queryResult.embedding;
+
+      // Get all entries with embeddings from database
+      const entries = db.exec(`
+        SELECT id, key, namespace, content, embedding, embedding_dimensions
+        FROM memory_entries
+        WHERE status = 'active'
+          AND embedding IS NOT NULL
+          ${namespace !== 'all' ? `AND namespace = '${namespace}'` : ''}
+        LIMIT 1000
+      `);
+
+      const results: { score: number; id: string; key: string; content: string; namespace: string }[] = [];
+
+      if (entries[0]?.values) {
+        for (const row of entries[0].values) {
+          const [id, key, ns, content, embeddingJson] = row as [string, string, string, string, string];
+
+          if (!embeddingJson) continue;
+
+          try {
+            const embedding = JSON.parse(embeddingJson) as number[];
+
+            // Calculate cosine similarity
+            const similarity = cosineSimilarity(queryEmbedding, embedding);
+
+            if (similarity >= threshold) {
+              results.push({
+                score: similarity,
+                id: id.substring(0, 10),
+                key: key || id.substring(0, 15),
+                content: (content || '').substring(0, 45) + ((content || '').length > 45 ? '...' : ''),
+                namespace: ns || 'default'
+              });
+            }
+          } catch {
+            // Skip entries with invalid embeddings
+          }
+        }
+      }
+
+      // Also search entries without embeddings using keyword match
+      if (results.length < limit) {
+        const keywordEntries = db.exec(`
+          SELECT id, key, namespace, content
+          FROM memory_entries
+          WHERE status = 'active'
+            AND (content LIKE '%${query.replace(/'/g, "''")}%' OR key LIKE '%${query.replace(/'/g, "''")}%')
+            ${namespace !== 'all' ? `AND namespace = '${namespace}'` : ''}
+          LIMIT ${limit - results.length}
+        `);
+
+        if (keywordEntries[0]?.values) {
+          for (const row of keywordEntries[0].values) {
+            const [id, key, ns, content] = row as [string, string, string, string];
+
+            // Avoid duplicates
+            if (!results.some(r => r.id === id.substring(0, 10))) {
+              results.push({
+                score: 0.5, // Keyword match base score
+                id: id.substring(0, 10),
+                key: key || id.substring(0, 15),
+                content: (content || '').substring(0, 45) + ((content || '').length > 45 ? '...' : ''),
+                namespace: ns || 'default'
+              });
+            }
+          }
+        }
+      }
+
+      // Sort by score descending
+      results.sort((a, b) => b.score - a.score);
+      const topResults = results.slice(0, limit);
+
+      const searchTime = Date.now() - startTime;
+      db.close();
+
+      spinner.succeed(`Found ${topResults.length} matches (${searchTime}ms)`);
+
+      if (topResults.length === 0) {
+        output.writeln();
+        output.printWarning('No matches found');
+        output.printInfo(`Try: claude-flow memory store -k "key" --value "your data"`);
+        return { success: true, data: [] };
+      }
+
+      output.writeln();
+      output.printTable({
+        columns: [
+          { key: 'score', header: 'Score', width: 10 },
+          { key: 'key', header: 'Key', width: 18 },
+          { key: 'content', header: 'Content', width: 42 },
+        ],
+        data: topResults.map(r => ({
+          score: r.score >= 0.8 ? output.success(r.score.toFixed(2)) :
+                 r.score >= 0.6 ? output.warning(r.score.toFixed(2)) :
+                 output.dim(r.score.toFixed(2)),
+          key: r.key,
+          content: r.content
+        })),
+      });
+
+      output.writeln();
+      output.writeln(output.dim(`Searched ${namespace} namespace (${queryResult.model}, ${searchTime}ms)`));
+
+      return { success: true, data: topResults };
+    } catch (error) {
+      spinner.fail('Search failed');
+      output.printError(error instanceof Error ? error.message : String(error));
+      return { success: false, exitCode: 1 };
+    }
   },
 };
+
+// Helper: Calculate cosine similarity between two vectors
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) {
+    // Handle dimension mismatch - truncate to shorter
+    const minLen = Math.min(a.length, b.length);
+    a = a.slice(0, minLen);
+    b = b.slice(0, minLen);
+  }
+
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+
+  const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
+  return magnitude === 0 ? 0 : dotProduct / magnitude;
+}
 
 // Compare subcommand
 const compareCommand: Command = {
