@@ -501,26 +501,59 @@ export const performanceTools: MCPTool[] = [
       const metric = (input.metric as string) || 'all';
       const aggregation = (input.aggregation as string) || 'avg';
 
+      // Get REAL system metrics
+      const memUsage = process.memoryUsage();
+      const loadAvg = os.loadavg();
+      const cpus = os.cpus();
+      const totalMem = os.totalmem();
+      const freeMem = os.freemem();
+      const store = loadPerfStore();
+
+      // Calculate real CPU percentage from load average
+      const cpuPercent = Math.min((loadAvg[0] / cpus.length) * 100, 100);
+      const memUsedMB = Math.round((totalMem - freeMem) / 1024 / 1024);
+      const memTotalMB = Math.round(totalMem / 1024 / 1024);
+      const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+
+      // Calculate statistics from stored history
+      const history = store.metrics.slice(-100);
+      const cpuHistory = history.map(m => m.cpu.usage);
+      const memHistory = history.map(m => m.memory.used);
+
+      const calcStats = (arr: number[], current: number) => {
+        if (arr.length === 0) return { current, avg: current, min: current, max: current, p50: current, p95: current, p99: current };
+        const sorted = [...arr].sort((a, b) => a - b);
+        return {
+          current,
+          avg: arr.reduce((s, v) => s + v, 0) / arr.length,
+          min: Math.min(...arr),
+          max: Math.max(...arr),
+          p50: sorted[Math.floor(sorted.length * 0.5)],
+          p95: sorted[Math.floor(sorted.length * 0.95)],
+          p99: sorted[Math.floor(sorted.length * 0.99)],
+        };
+      };
+
+      const cpuStats = calcStats(cpuHistory, cpuPercent);
+      const memStats = calcStats(memHistory, memUsedMB);
+
       const allMetrics = {
         cpu: {
-          current: 28.5,
-          avg: 25.3,
-          min: 10.2,
-          max: 65.8,
-          p50: 24.1,
-          p95: 55.2,
-          p99: 62.3,
+          ...cpuStats,
           unit: '%',
+          cores: cpus.length,
+          model: cpus[0]?.model,
+          loadAverage: loadAvg,
+          _real: true,
         },
         memory: {
-          current: 312,
-          avg: 280,
-          min: 200,
-          max: 450,
-          p50: 275,
-          p95: 400,
-          p99: 430,
+          ...memStats,
+          total: memTotalMB,
+          heap: heapMB,
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+          external: Math.round(memUsage.external / 1024 / 1024),
           unit: 'MB',
+          _real: true,
         },
         latency: {
           current: 45,
