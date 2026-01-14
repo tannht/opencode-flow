@@ -459,6 +459,37 @@ npx claude-flow@v3alpha doctor --fix
 
 **KEY**: MCP coordinates the strategy, Claude Code's Task tool executes with real agents.
 
+## 📦 Publishing to npm
+
+**CRITICAL: @latest tag must ALWAYS point to the newest version**
+
+When publishing a new version of `@claude-flow/cli`:
+
+```bash
+# 1. Bump version
+cd v3/@claude-flow/cli
+npm version 3.0.0-alpha.XXX --no-git-tag-version
+
+# 2. Build
+npm run build
+
+# 3. Publish with alpha tag
+npm publish --tag alpha
+
+# 4. IMMEDIATELY update @latest tag to match
+npm dist-tag add @claude-flow/cli@3.0.0-alpha.XXX latest
+```
+
+**Why both tags?**
+- `@alpha` - For users explicitly wanting pre-release versions
+- `@latest` - Default tag, MUST always be newest for `npx @claude-flow/cli@latest`
+
+**Verification:**
+```bash
+npm view @claude-flow/cli dist-tags --json
+# Should show both "alpha" and "latest" pointing to same version
+```
+
 ## Support
 
 - Documentation: https://github.com/ruvnet/claude-flow
