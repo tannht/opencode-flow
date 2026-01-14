@@ -81,7 +81,21 @@ function getUserInfo() {
       if (lastModelUsage) {
         const modelIds = Object.keys(lastModelUsage);
         if (modelIds.length > 0) {
-          const modelId = modelIds[0]; // Get most recent
+          // Take the last model (most recently added to the object)
+          // Or find the one with most tokens (most actively used this session)
+          let modelId = modelIds[modelIds.length - 1];
+          if (modelIds.length > 1) {
+            // If multiple models, pick the one with most total tokens
+            let maxTokens = 0;
+            for (const id of modelIds) {
+              const usage = lastModelUsage[id];
+              const total = (usage.inputTokens || 0) + (usage.outputTokens || 0);
+              if (total > maxTokens) {
+                maxTokens = total;
+                modelId = id;
+              }
+            }
+          }
           // Parse model ID to human-readable name
           if (modelId.includes('opus')) modelName = 'Opus 4.5';
           else if (modelId.includes('sonnet')) modelName = 'Sonnet 4';
