@@ -3394,10 +3394,18 @@ const statuslineCommand: Command = {
       let name = 'user';
       let gitBranch = '';
       const modelName = 'Opus 4.5';
+      const isWindows = process.platform === 'win32';
 
       try {
-        name = execSync('git config user.name 2>/dev/null || echo "user"', { encoding: 'utf-8' }).trim();
-        gitBranch = execSync('git branch --show-current 2>/dev/null || echo ""', { encoding: 'utf-8' }).trim();
+        const nameCmd = isWindows
+          ? 'git config user.name 2>NUL || echo user'
+          : 'git config user.name 2>/dev/null || echo "user"';
+        const branchCmd = isWindows
+          ? 'git branch --show-current 2>NUL || echo.'
+          : 'git branch --show-current 2>/dev/null || echo ""';
+        name = execSync(nameCmd, { encoding: 'utf-8' }).trim();
+        gitBranch = execSync(branchCmd, { encoding: 'utf-8' }).trim();
+        if (gitBranch === '.') gitBranch = '';
       } catch {
         // Ignore
       }
