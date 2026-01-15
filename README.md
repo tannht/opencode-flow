@@ -219,7 +219,10 @@ Claude-Flow v3 introduces **self-learning neural capabilities** that no other ag
 | **MCP Integration** | ✅ Native | ⛔ | ⛔ | ⛔ | ⛔ |
 | **Swarm Topologies** | ✅ 4 (mesh, hierarchical, etc.) | 1 | 1 | 1 | 1 |
 
-**Key differentiators:**
+<details>
+<summary>🚀 <strong>Key Differentiators</strong> — Self-learning, memory optimization, fault tolerance</summary>
+
+What makes Claude-Flow different from other agent frameworks? These 9 capabilities work together to create a system that learns from experience, runs efficiently on any hardware, and keeps working even when things go wrong.
 
 | | Feature | What It Does | Technical Details |
 |---|---------|--------------|-------------------|
@@ -232,6 +235,8 @@ Claude-Flow v3 introduces **self-learning neural capabilities** that no other ag
 | 🗜️ | **Int8 Quantization** | Converts 32-bit weights to 8-bit with minimal accuracy loss | 3.92x memory reduction with calibrated 8-bit integers |
 | 🤝 | **Claims System** | Manages task ownership between humans and agents with handoff support | Work ownership with claim/release/handoff protocols |
 | 🛡️ | **Byzantine Consensus** | Coordinates agents even when some fail or return bad results | Fault-tolerant, handles up to 1/3 failing agents |
+
+</details>
 
 <details>
 <summary>💰 <strong>Intelligent 3-Tier Model Routing</strong> — Save 75% on API costs, extend Claude Max 2.5x</summary>
